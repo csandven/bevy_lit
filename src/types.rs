@@ -1,13 +1,15 @@
+#![expect(deprecated)]
+
 use bevy::{
     math::Vec2,
     prelude::*,
     reflect::Reflect,
     render::{
         render_resource::ShaderType,
-        view::{InheritedVisibility, ViewVisibility, Visibility},
+        view::Visibility,
         sync_world::SyncToRenderWorld
     },
-    transform::components::{GlobalTransform, Transform},
+    transform::components::Transform,
 };
 
 /// Represents ambient light in a 2D environment. This component belongs to a [`Camera2d`] entity.
