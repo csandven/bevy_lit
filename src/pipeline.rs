@@ -8,16 +8,16 @@ use bevy::{
         render_resource::{
             binding_types::{sampler, texture_2d, uniform_buffer},
             BindGroupEntries, BindGroupLayout, BindGroupLayoutEntries, CachedRenderPipelineId,
-            ColorTargetState, ColorWrites, FragmentState, GpuArrayBuffer, LoadOp, MultisampleState,
-            Operations, PipelineCache, PrimitiveState, RenderPassColorAttachment,
+            ColorTargetState, ColorWrites, FragmentState, GpuArrayBuffer, LoadOp,
+            Operations, PipelineCache, RenderPassColorAttachment,
             RenderPassDescriptor, RenderPipelineDescriptor, SamplerBindingType, SamplerDescriptor,
             ShaderStages, SpecializedRenderPipeline, StoreOp, TextureFormat, TextureSampleType,
         },
         renderer::{RenderContext, RenderDevice},
-        texture::BevyDefault,
         view::{ViewTarget, ViewUniform, ViewUniformOffset},
     },
 };
+use bevy_image::prelude::*;
 
 use crate::{
     extract::{ExtractedLightOccluder2d, ExtractedLighting2dSettings, ExtractedPointLight2d},
@@ -53,10 +53,11 @@ fn create_pipeline_descriptor(
                 write_mask: ColorWrites::ALL,
             })],
         }),
-        primitive: PrimitiveState::default(),
-        depth_stencil: None,
-        multisample: MultisampleState::default(),
         push_constant_ranges: vec![],
+        primitive: Default::default(),
+        depth_stencil: None,
+        multisample: Default::default(),
+        zero_initialize_workgroup_memory: false,
     })
 }
 
@@ -189,10 +190,11 @@ impl SpecializedRenderPipeline for PostProcessPipeline {
                     write_mask: ColorWrites::ALL,
                 })],
             }),
-            primitive: PrimitiveState::default(),
+            primitive: Default::default(),
             depth_stencil: None,
-            multisample: MultisampleState::default(),
+            multisample: Default::default(),
             push_constant_ranges: vec![],
+            zero_initialize_workgroup_memory: false,
         }
     }
 }
