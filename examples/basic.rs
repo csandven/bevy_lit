@@ -19,7 +19,7 @@ struct MovingLights;
 
 fn setup(mut commands: Commands) {
     commands.spawn((
-        Camera2d::default(),
+        Camera2d,
         Lighting2dSettings {
             blur: 32.0,
             raymarch: RaymarchSettings {
@@ -46,7 +46,7 @@ fn setup(mut commands: Commands) {
         commands.spawn((
             Sprite {
                 custom_size: Some(Vec2::splat(100.0)),
-                ..Default::default()
+                ..default()
             },
             Transform::from_translation(pos),
             LightOccluder2d {

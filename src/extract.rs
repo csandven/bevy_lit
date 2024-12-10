@@ -54,8 +54,6 @@ pub fn extract_light_occluders(
         Query<(RenderEntity, &LightOccluder2d, &GlobalTransform, &ViewVisibility)>,
     >,
 ) {
-    commands.spawn(ExtractedLightOccluder2d::default());
-
     for (render_entity, light_occluder, transform, view_visibility) in &light_occluders_query {
         if !view_visibility.get() {
             continue;
@@ -81,8 +79,6 @@ pub fn extract_point_lights(
     mut commands: Commands,
     point_lights_query: Extract<Query<(RenderEntity, &PointLight2d, &GlobalTransform, &ViewVisibility)>>,
 ) {
-    commands.spawn(ExtractedPointLight2d::default());
-
     for (render_entity, point_light, transform, visibility) in point_lights_query.iter() {
         if !visibility.get() {
             continue;

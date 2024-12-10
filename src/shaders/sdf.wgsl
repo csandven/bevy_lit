@@ -23,8 +23,8 @@ fn fragment(in: FullscreenVertexOutput) -> @location(0) vec4<f32> {
 #endif
 
     // TODO: skiping first occluder that is a dummy. Find way to remove this.
-    var sdf = occluder_sd(pos, occluders[1]);
-    for (var i = 2u; i < occluder_count; i++) {
+    var sdf = occluder_sd(pos, occluders[0]);
+    for (var i = 1u; i < occluder_count; i++) {
         sdf = min(sdf, occluder_sd(pos, occluders[i]));
     }
 

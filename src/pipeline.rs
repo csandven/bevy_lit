@@ -17,7 +17,6 @@ use bevy::{
         view::{ViewTarget, ViewUniform, ViewUniformOffset},
     },
 };
-use bevy_image::prelude::*;
 
 use crate::{
     extract::{ExtractedLightOccluder2d, ExtractedLighting2dSettings, ExtractedPointLight2d},
