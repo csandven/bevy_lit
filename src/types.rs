@@ -1,16 +1,16 @@
+#![expect(deprecated)]
+
 use bevy::{
     math::Vec2,
     prelude::*,
     reflect::Reflect,
-    render::{
-        render_resource::ShaderType,
-        view::{InheritedVisibility, ViewVisibility, Visibility},
-    },
-    transform::components::{GlobalTransform, Transform},
+    render::{render_resource::ShaderType, sync_world::SyncToRenderWorld, view::Visibility},
+    transform::components::Transform,
 };
 
 /// Represents ambient light in a 2D environment. This component belongs to a [`Camera2d`] entity.
 #[derive(Component, Clone, Reflect)]
+#[require(SyncToRenderWorld)]
 pub struct AmbientLight2d {
     /// The color of the ambient light.
     pub color: Color,
@@ -51,6 +51,7 @@ impl Default for RaymarchSettings {
 /// Settings for 2D lighting. This component belongs to a [`Camera2d`] entity and is mandatory for
 /// lighting effects
 #[derive(Component, Clone, Reflect)]
+#[require(SyncToRenderWorld)]
 pub struct Lighting2dSettings {
     /// The blur coc (circle of confusion) dimension contributing to the softness of the shadows
     pub blur: f32,
@@ -72,6 +73,7 @@ impl Default for Lighting2dSettings {
 
 /// Represents a point light in a 2D environment.
 #[derive(Component, Clone, Reflect)]
+#[require(SyncToRenderWorld, Transform, Visibility)]
 pub struct PointLight2d {
     /// The color of the point light.
     pub color: Color,
@@ -95,24 +97,20 @@ impl Default for PointLight2d {
 }
 
 /// A bundle of components representing a point light in a 2D environment.
+#[deprecated(since = "0.4.0", note = "Use the `PointLight2d` component instead.")]
 #[derive(Bundle, Default)]
 pub struct PointLight2dBundle {
     /// The point light component.
     pub point_light: PointLight2d,
     /// The transform component.
     pub transform: Transform,
-    /// The global transform component.
-    pub global_transform: GlobalTransform,
     /// The visibility component.
     pub visibility: Visibility,
-    /// The inherited visibility component.
-    pub inherited_visibility: InheritedVisibility,
-    /// The view visibility component.
-    pub view_visibility: ViewVisibility,
 }
 
 /// Represents an occluder that blocks light in a 2D environment.
 #[derive(Component, Default, Clone, Reflect)]
+#[require(SyncToRenderWorld, Transform, Visibility)]
 pub struct LightOccluder2d {
     /// Half the size of the occluder AABB rectangle.
     pub half_size: Vec2,
@@ -125,18 +123,13 @@ impl LightOccluder2d {
 }
 
 /// A bundle of components representing a light occluder in a 2D environment.
+#[deprecated(since = "0.4.0", note = "Use the `LightOccluder2d` component instead.")]
 #[derive(Bundle, Default)]
 pub struct LightOccluder2dBundle {
     /// The light occluder component.
     pub light_occluder: LightOccluder2d,
     /// The transform component.
     pub transform: Transform,
-    /// The global transform component.
-    pub global_transform: GlobalTransform,
     /// The visibility component.
     pub visibility: Visibility,
-    /// The inherited visibility component.
-    pub inherited_visibility: InheritedVisibility,
-    /// The view visibility component.
-    pub view_visibility: ViewVisibility,
 }

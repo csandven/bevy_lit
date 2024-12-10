@@ -6,15 +6,14 @@ use bevy::{
         extract_component::DynamicUniformIndex,
         render_graph::{NodeRunError, RenderGraphContext, RenderLabel, ViewNode},
         render_resource::{
-            binding_types::{sampler, texture_2d, uniform_buffer},
             BindGroupEntries, BindGroupLayout, BindGroupLayoutEntries, CachedRenderPipelineId,
-            ColorTargetState, ColorWrites, FragmentState, GpuArrayBuffer, LoadOp, MultisampleState,
-            Operations, PipelineCache, PrimitiveState, RenderPassColorAttachment,
-            RenderPassDescriptor, RenderPipelineDescriptor, SamplerBindingType, SamplerDescriptor,
-            ShaderStages, SpecializedRenderPipeline, StoreOp, TextureFormat, TextureSampleType,
+            ColorTargetState, ColorWrites, FragmentState, GpuArrayBuffer, LoadOp, Operations,
+            PipelineCache, RenderPassColorAttachment, RenderPassDescriptor,
+            RenderPipelineDescriptor, SamplerBindingType, SamplerDescriptor, ShaderStages,
+            SpecializedRenderPipeline, StoreOp, TextureFormat, TextureSampleType,
+            binding_types::{sampler, texture_2d, uniform_buffer},
         },
         renderer::{RenderContext, RenderDevice},
-        texture::BevyDefault,
         view::{ViewTarget, ViewUniform, ViewUniformOffset},
     },
 };
@@ -53,10 +52,11 @@ fn create_pipeline_descriptor(
                 write_mask: ColorWrites::ALL,
             })],
         }),
-        primitive: PrimitiveState::default(),
-        depth_stencil: None,
-        multisample: MultisampleState::default(),
         push_constant_ranges: vec![],
+        primitive: Default::default(),
+        depth_stencil: None,
+        multisample: Default::default(),
+        zero_initialize_workgroup_memory: false,
     })
 }
 
@@ -189,10 +189,11 @@ impl SpecializedRenderPipeline for PostProcessPipeline {
                     write_mask: ColorWrites::ALL,
                 })],
             }),
-            primitive: PrimitiveState::default(),
+            primitive: Default::default(),
             depth_stencil: None,
-            multisample: MultisampleState::default(),
+            multisample: Default::default(),
             push_constant_ranges: vec![],
+            zero_initialize_workgroup_memory: false,
         }
     }
 }
@@ -310,11 +311,10 @@ impl ViewNode for LightingNode {
                 ..default()
             });
 
-            blur_pass.set_bind_group(
-                0,
-                &bind_groups.blur,
-                &[view_uniform.offset, settings_index.index()],
-            );
+            blur_pass.set_bind_group(0, &bind_groups.blur, &[
+                view_uniform.offset,
+                settings_index.index(),
+            ]);
             blur_pass.set_render_pipeline(blur_pipeline);
             blur_pass.draw(0..3, 0..1);
         }

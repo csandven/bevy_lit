@@ -1,4 +1,5 @@
-use bevy::{math::vec3, prelude::*, window::PrimaryWindow};
+use bevy::window::PrimaryWindow;
+use bevy::{math::vec3, prelude::*};
 use bevy_lit::prelude::*;
 
 fn main() {
@@ -18,7 +19,7 @@ struct MovingLights;
 
 fn setup(mut commands: Commands) {
     commands.spawn((
-        Camera2dBundle::default(),
+        Camera2d,
         Lighting2dSettings {
             blur: 32.0,
             raymarch: RaymarchSettings {
@@ -43,14 +44,11 @@ fn setup(mut commands: Commands) {
     .into_iter()
     .for_each(|pos| {
         commands.spawn((
-            SpriteBundle {
-                transform: Transform::from_translation(pos),
-                sprite: Sprite {
-                    custom_size: Some(Vec2::splat(100.0)),
-                    ..default()
-                },
+            Sprite {
+                custom_size: Some(Vec2::splat(100.0)),
                 ..default()
             },
+            Transform::from_translation(pos),
             LightOccluder2d {
                 half_size: Vec2::splat(50.0),
             },
@@ -58,7 +56,7 @@ fn setup(mut commands: Commands) {
     });
 
     commands
-        .spawn((MovingLights, SpatialBundle::default()))
+        .spawn((MovingLights, Transform::default(), Visibility::default()))
         .with_children(|builder| {
             let point_light = PointLight2d {
                 intensity: 3.0,
@@ -67,37 +65,29 @@ fn setup(mut commands: Commands) {
                 ..default()
             };
 
-            builder.spawn(PointLight2dBundle {
-                point_light: PointLight2d {
+            builder.spawn((
+                PointLight2d {
                     color: Color::srgb(0.0, 1.0, 1.0),
                     ..point_light
                 },
-                transform: Transform::from_xyz(-500.0, 0.0, 0.0),
-                ..default()
-            });
+                Transform::from_xyz(-500.0, 0.0, 0.0),
+            ));
 
-            builder.spawn(PointLight2dBundle {
-                point_light: PointLight2d {
+            builder.spawn((
+                PointLight2d {
                     color: Color::srgb(1.0, 0.0, 1.0),
                     ..point_light
                 },
-                transform: Transform::from_xyz(500.0, 0.0, 0.0),
-                ..default()
-            });
+                Transform::from_xyz(500.0, 0.0, 0.0),
+            ));
         });
 
-    commands.spawn((
-        CursorLight,
-        PointLight2dBundle {
-            point_light: PointLight2d {
-                intensity: 4.0,
-                radius: 400.0,
-                falloff: 3.0,
-                color: Color::srgb(1.0, 1.0, 0.0),
-            },
-            ..default()
-        },
-    ));
+    commands.spawn((CursorLight, PointLight2d {
+        intensity: 4.0,
+        radius: 400.0,
+        falloff: 3.0,
+        color: Color::srgb(1.0, 1.0, 0.0),
+    }));
 }
 
 fn update_cursor_light(
@@ -111,7 +101,7 @@ fn update_cursor_light(
 
     if let Some(world_position) = window
         .cursor_position()
-        .and_then(|cursor| camera.viewport_to_world(camera_transform, cursor))
+        .and_then(|cursor| camera.viewport_to_world(camera_transform, cursor).ok())
         .map(|ray| ray.origin.truncate().extend(0.0))
     {
         point_light_transform.translation = world_position;
@@ -123,6 +113,6 @@ fn update_moving_lights(
     mut point_light_query: Query<&mut Transform, With<MovingLights>>,
 ) {
     for mut transform in &mut point_light_query {
-        transform.rotation *= Quat::from_rotation_z(time.delta_seconds() / 4.0);
+        transform.rotation *= Quat::from_rotation_z(time.delta_secs() / 4.0);
     }
 }
