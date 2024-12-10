@@ -40,6 +40,12 @@ fn fragment(in: FullscreenVertexOutput) -> @location(0) vec4<f32> {
 
     for (var i = 0u; i < light_count; i++) {
         let light = lights[i];
+
+        // ignore point lights with radius == 0.0
+        if light.radius == 0.0 {
+            continue;
+        }
+
         let dist = distance(light.center, pos);
 
         if dist < light.radius {
