@@ -52,7 +52,7 @@ fn main() {
 
 fn setup(mut commands: Commands) {
     commands.spawn((
-        Camera2dBundle::default(),
+        Camera2d,
         Lighting2dSettings {
             shadow_softness: 32.0,
             ..default()
@@ -63,21 +63,17 @@ fn setup(mut commands: Commands) {
         },
     ));
 
-    commands.spawn(PointLight2dBundle {
-        point_light: PointLight2d {
-            color: Color::rgb(1.0, 1.0, 1.0),
-            intensity: 3.0,
-            radius: 200.0,
-            falloff: 2.0,
-        },
-        ..default()
+    commands.spawn(PointLight2d {
+        color: Color::rgb(1.0, 1.0, 1.0),
+        intensity: 3.0,
+        radius: 200.0,
+        falloff: 2.0,
     });
 
-    commands.spawn(LightOccluder2dBundle {
-        light_occluder: LightOccluder2d::new(Vec2::new(50.0, 50.0)),
-        transform: Transform::from_xyz(0.0, 200.0, 0.0),
-        ..default()
-    });
+    commands.spawn((
+        LightOccluder2d::new(Vec2::new(50.0, 50.0)),
+        Transform::from_xyz(0.0, 200.0, 0.0)
+    ));
 }
 ```
 
