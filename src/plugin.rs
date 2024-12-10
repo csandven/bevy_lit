@@ -3,23 +3,23 @@ use bevy::{
     core_pipeline::core_2d::graph::{Core2d, Node2d},
     prelude::*,
     render::{
+        Render, RenderApp, RenderSet,
         extract_component::UniformComponentPlugin,
         gpu_component_array_buffer::GpuComponentArrayBufferPlugin,
         render_graph::{RenderGraphApp, ViewNodeRunner},
         render_resource::SpecializedRenderPipelines,
-        view::{check_visibility, prepare_view_targets, VisibilitySystems},
-        Render, RenderApp, RenderSet,
+        view::{VisibilitySystems, check_visibility, prepare_view_targets},
     },
 };
 
 use crate::{
     extract::{
-        extract_light_occluders, extract_lighting_settings, extract_point_lights,
         ExtractedLightOccluder2d, ExtractedLighting2dSettings, ExtractedPointLight2d,
+        extract_light_occluders, extract_lighting_settings, extract_point_lights,
     },
     pipeline::{
-        Lighting2dPrepassPipelines, LightingLabel, LightingNode, PostProcessPipeline, BLUR_SHADER,
-        LIGHTING_SHADER, POST_PROCESS_SHADER, SDF_SHADER, TYPES_SHADER,
+        BLUR_SHADER, LIGHTING_SHADER, Lighting2dPrepassPipelines, LightingLabel, LightingNode,
+        POST_PROCESS_SHADER, PostProcessPipeline, SDF_SHADER, TYPES_SHADER,
         VIEW_TRANSFORMATIONS_SHADER,
     },
     prelude::{AmbientLight2d, LightOccluder2d, Lighting2dSettings, PointLight2d},

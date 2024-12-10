@@ -4,11 +4,7 @@ use bevy::{
     math::Vec2,
     prelude::*,
     reflect::Reflect,
-    render::{
-        render_resource::ShaderType,
-        view::Visibility,
-        sync_world::SyncToRenderWorld
-    },
+    render::{render_resource::ShaderType, sync_world::SyncToRenderWorld, view::Visibility},
     transform::components::Transform,
 };
 
@@ -101,10 +97,7 @@ impl Default for PointLight2d {
 }
 
 /// A bundle of components representing a point light in a 2D environment.
-#[deprecated(
-    since = "0.4.0",
-    note = "Use the `PointLight2d` component instead."
-)]
+#[deprecated(since = "0.4.0", note = "Use the `PointLight2d` component instead.")]
 #[derive(Bundle, Default)]
 pub struct PointLight2dBundle {
     /// The point light component.
@@ -130,10 +123,7 @@ impl LightOccluder2d {
 }
 
 /// A bundle of components representing a light occluder in a 2D environment.
-#[deprecated(
-    since = "0.4.0",
-    note = "Use the `LightOccluder2d` component instead."
-)]
+#[deprecated(since = "0.4.0", note = "Use the `LightOccluder2d` component instead.")]
 #[derive(Bundle, Default)]
 pub struct LightOccluder2dBundle {
     /// The light occluder component.
