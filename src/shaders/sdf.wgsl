@@ -22,7 +22,6 @@ fn fragment(in: FullscreenVertexOutput) -> @location(0) vec4<f32> {
     let occluder_count = MAX_OCCLUDERS;
 #endif
 
-    // TODO: skiping first occluder that is a dummy. Find way to remove this.
     var sdf = occluder_sd(pos, occluders[0]);
     for (var i = 1u; i < occluder_count; i++) {
         let occluder = occluders[i];

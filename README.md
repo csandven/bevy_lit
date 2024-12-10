@@ -20,7 +20,7 @@ You can add `bevy_lit` to your `Cargo.lock`:
 
 ```toml
 [dependencies]
-bevy_lit = "0.3"
+bevy_lit = "0.4"
 ```
 
 Or install it using the CLI:
@@ -84,6 +84,13 @@ fn setup(mut commands: Commands) {
 ## Implementation
 
 `bevy_lit` uses signed distance fields (SDFs) to compute the occluders' distances. To soften the shadows, a blur is applied. This approach is not ideal and might have limitations in terms of performance and visual accuracy, but it provides a starting point for basic 2D lighting effects.
+
+## Compatibility
+
+| bevy | bevy_lit |
+| ---- | -------- |
+| 0.15 | 0.4      |
+| 0.14 | 0.3      |
 
 ## Acknowledgement
 

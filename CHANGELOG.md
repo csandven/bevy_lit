@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.4.0
+
+### Features
+
+- Bevy 0.15 🎉
+- Deprecated `PointLight2dBundle` and `LightOccluder2dBundle` in favor of required components for `PointLight2d` and `LightOccluder2d`
+
+### Migration
+
+```diff
+- commands.spawn(PointLight2dBundle {..});
++ commands.spawn(PointLight2d {..});
+- commands.spawn(LightOccluder2dBundle {..});
++ commands.spawn(LightOccluder2d {..});
+```
+
 ## 0.3.0
 
 ### Features
