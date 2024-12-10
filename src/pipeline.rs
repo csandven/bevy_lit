@@ -6,18 +6,17 @@ use bevy::{
         extract_component::DynamicUniformIndex,
         render_graph::{NodeRunError, RenderGraphContext, RenderLabel, ViewNode},
         render_resource::{
-            binding_types::{sampler, texture_2d, uniform_buffer},
             BindGroupEntries, BindGroupLayout, BindGroupLayoutEntries, CachedRenderPipelineId,
-            ColorTargetState, ColorWrites, FragmentState, GpuArrayBuffer, LoadOp,
-            Operations, PipelineCache, RenderPassColorAttachment,
-            RenderPassDescriptor, RenderPipelineDescriptor, SamplerBindingType, SamplerDescriptor,
-            ShaderStages, SpecializedRenderPipeline, StoreOp, TextureFormat, TextureSampleType,
+            ColorTargetState, ColorWrites, FragmentState, GpuArrayBuffer, LoadOp, Operations,
+            PipelineCache, RenderPassColorAttachment, RenderPassDescriptor,
+            RenderPipelineDescriptor, SamplerBindingType, SamplerDescriptor, ShaderStages,
+            SpecializedRenderPipeline, StoreOp, TextureFormat, TextureSampleType,
+            binding_types::{sampler, texture_2d, uniform_buffer},
         },
         renderer::{RenderContext, RenderDevice},
         view::{ViewTarget, ViewUniform, ViewUniformOffset},
     },
 };
-use bevy_image::prelude::*;
 
 use crate::{
     extract::{ExtractedLightOccluder2d, ExtractedLighting2dSettings, ExtractedPointLight2d},
@@ -312,11 +311,10 @@ impl ViewNode for LightingNode {
                 ..default()
             });
 
-            blur_pass.set_bind_group(
-                0,
-                &bind_groups.blur,
-                &[view_uniform.offset, settings_index.index()],
-            );
+            blur_pass.set_bind_group(0, &bind_groups.blur, &[
+                view_uniform.offset,
+                settings_index.index(),
+            ]);
             blur_pass.set_render_pipeline(blur_pipeline);
             blur_pass.draw(0..3, 0..1);
         }

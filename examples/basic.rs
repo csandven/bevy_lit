@@ -1,5 +1,5 @@
-use bevy::{math::vec3, prelude::*};
 use bevy::window::PrimaryWindow;
+use bevy::{math::vec3, prelude::*};
 use bevy_lit::prelude::*;
 
 fn main() {
@@ -19,7 +19,7 @@ struct MovingLights;
 
 fn setup(mut commands: Commands) {
     commands.spawn((
-        Camera2d::default(),
+        Camera2d,
         Lighting2dSettings {
             blur: 32.0,
             raymarch: RaymarchSettings {
@@ -46,7 +46,7 @@ fn setup(mut commands: Commands) {
         commands.spawn((
             Sprite {
                 custom_size: Some(Vec2::splat(100.0)),
-                ..Default::default()
+                ..default()
             },
             Transform::from_translation(pos),
             LightOccluder2d {
@@ -70,7 +70,7 @@ fn setup(mut commands: Commands) {
                     color: Color::srgb(0.0, 1.0, 1.0),
                     ..point_light
                 },
-                Transform::from_xyz(-500.0, 0.0, 0.0)
+                Transform::from_xyz(-500.0, 0.0, 0.0),
             ));
 
             builder.spawn((
@@ -78,19 +78,16 @@ fn setup(mut commands: Commands) {
                     color: Color::srgb(1.0, 0.0, 1.0),
                     ..point_light
                 },
-                Transform::from_xyz(500.0, 0.0, 0.0)
+                Transform::from_xyz(500.0, 0.0, 0.0),
             ));
         });
 
-    commands.spawn((
-        CursorLight,
-        PointLight2d {
-            intensity: 4.0,
-            radius: 400.0,
-            falloff: 3.0,
-            color: Color::srgb(1.0, 1.0, 0.0),
-        },
-    ));
+    commands.spawn((CursorLight, PointLight2d {
+        intensity: 4.0,
+        radius: 400.0,
+        falloff: 3.0,
+        color: Color::srgb(1.0, 1.0, 0.0),
+    }));
 }
 
 fn update_cursor_light(

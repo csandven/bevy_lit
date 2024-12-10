@@ -38,8 +38,7 @@ fn fragment(in: FullscreenVertexOutput) -> @location(0) vec4<f32> {
     let light_count = MAX_LIGHTS;
 #endif
 
-    // TODO: skiping first point light that is a dummy. Find way to remove this.
-    for (var i = 1u; i < light_count; i++) {
+    for (var i = 0u; i < light_count; i++) {
         let light = lights[i];
         let dist = distance(light.center, pos);
 

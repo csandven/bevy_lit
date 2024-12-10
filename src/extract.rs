@@ -1,9 +1,9 @@
+use crate::prelude::*;
+use bevy::render::sync_world::RenderEntity;
 use bevy::{
     prelude::*,
-    render::{render_resource::ShaderType, view::ViewVisibility, Extract},
+    render::{Extract, render_resource::ShaderType, view::ViewVisibility},
 };
-use bevy::render::sync_world::RenderEntity;
-use crate::prelude::*;
 
 #[derive(Component, Clone, ShaderType)]
 pub struct ExtractedLighting2dSettings {
@@ -27,15 +27,12 @@ pub fn extract_lighting_settings(
                 brightness: 1.0,
             });
 
-            (
-                e,
-                ExtractedLighting2dSettings {
-                    blur: settings.blur,
-                    fixed_resolution: if settings.fixed_resolution { 1 } else { 0 },
-                    ambient_light: ambient_light.color.to_linear() * ambient_light.brightness,
-                    raymarch: settings.raymarch.clone(),
-                },
-            )
+            (e, ExtractedLighting2dSettings {
+                blur: settings.blur,
+                fixed_resolution: if settings.fixed_resolution { 1 } else { 0 },
+                ambient_light: ambient_light.color.to_linear() * ambient_light.brightness,
+                raymarch: settings.raymarch.clone(),
+            })
         })
         .collect::<Vec<_>>();
 
@@ -51,20 +48,25 @@ pub struct ExtractedLightOccluder2d {
 pub fn extract_light_occluders(
     mut commands: Commands,
     light_occluders_query: Extract<
-        Query<(RenderEntity, &LightOccluder2d, &GlobalTransform, &ViewVisibility)>,
+        Query<(
+            RenderEntity,
+            &LightOccluder2d,
+            &GlobalTransform,
+            &ViewVisibility,
+        )>,
     >,
 ) {
-    commands.spawn(ExtractedLightOccluder2d::default());
-
     for (render_entity, light_occluder, transform, view_visibility) in &light_occluders_query {
         if !view_visibility.get() {
             continue;
         }
 
-        commands.entity(render_entity).insert(ExtractedLightOccluder2d {
-            half_size: light_occluder.half_size,
-            center: transform.translation().xy(),
-        });
+        commands
+            .entity(render_entity)
+            .insert(ExtractedLightOccluder2d {
+                half_size: light_occluder.half_size,
+                center: transform.translation().xy(),
+            });
     }
 }
 
@@ -79,21 +81,28 @@ pub struct ExtractedPointLight2d {
 
 pub fn extract_point_lights(
     mut commands: Commands,
-    point_lights_query: Extract<Query<(RenderEntity, &PointLight2d, &GlobalTransform, &ViewVisibility)>>,
+    point_lights_query: Extract<
+        Query<(
+            RenderEntity,
+            &PointLight2d,
+            &GlobalTransform,
+            &ViewVisibility,
+        )>,
+    >,
 ) {
-    commands.spawn(ExtractedPointLight2d::default());
-
     for (render_entity, point_light, transform, visibility) in point_lights_query.iter() {
         if !visibility.get() {
             continue;
         }
 
-        commands.entity(render_entity).insert(ExtractedPointLight2d {
-            color: point_light.color.to_linear(),
-            center: transform.translation().xy(),
-            radius: point_light.radius,
-            intensity: point_light.intensity,
-            falloff: point_light.falloff,
-        });
+        commands
+            .entity(render_entity)
+            .insert(ExtractedPointLight2d {
+                color: point_light.color.to_linear(),
+                center: transform.translation().xy(),
+                radius: point_light.radius,
+                intensity: point_light.intensity,
+                falloff: point_light.falloff,
+            });
     }
 }
