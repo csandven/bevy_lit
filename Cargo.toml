@@ -1,6 +1,6 @@
 [package]
 name = "bevy_lit"
-version = "0.4.0"
+version = "0.4.1"
 edition = "2021"
 categories = ["graphics", "game-development", "game-engines", "rendering"]
 description = "A lighting 2d library for Bevy"
@@ -16,7 +16,7 @@ bevy = { version = "0.15", default-features = false, features = [
   "bevy_core_pipeline",
   "bevy_winit",
   "x11",
-  "png" # TODO: Remove when bevyengine/bevy#16568 is solved
+  "png",                # TODO: Remove when bevyengine/bevy#16568 is solved
 ] }
 
 [dev-dependencies]
