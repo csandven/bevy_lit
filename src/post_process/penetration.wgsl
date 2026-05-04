@@ -27,15 +27,21 @@ fn fragment(in: FullscreenVertexOutput) -> @location(0) vec4<f32> {
     var total_weight = 0.0;
 
     // Sampling configuration
-    let two_pi = 6.2831853;
-    let angle_step = two_pi / f32(p.directions);
+    let directions = min(p.directions, 6u);
+    let steps = min(p.steps, 6u);
+    if directions == 0u || steps == 0u {
+        return vec4(current.rgb, 1.0);
+    }
 
-    for (var dir_index = 0u; dir_index < p.directions; dir_index++) {
+    let two_pi = 6.2831853;
+    let angle_step = two_pi / f32(directions);
+
+    for (var dir_index = 0u; dir_index < directions; dir_index++) {
         let angle = f32(dir_index) * angle_step;
         let direction = vec2(cos(angle), sin(angle));
 
-        for (var i = 0u; i < p.steps; i++) {
-            let t = (f32(i) + 0.5) / f32(p.steps); // [0.03125 ... 0.96875]
+        for (var i = 0u; i < steps; i++) {
+            let t = (f32(i) + 0.5) / f32(steps); // [0.0833 ... 0.9167] with 6 steps
             let distance = t * p.max;
             let offset = direction * distance;
             let sample_pos = pos + offset;

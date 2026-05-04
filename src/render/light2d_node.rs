@@ -1,11 +1,12 @@
 use bevy::{
+    color::LinearRgba,
     ecs::{query::QueryItem, system::lifetimeless::Read},
     prelude::*,
     render::{
         camera::ExtractedCamera,
         render_graph::{NodeRunError, RenderGraphContext, ViewNode},
         render_phase::ViewSortedRenderPhases,
-        render_resource::{Operations, RenderPassColorAttachment, RenderPassDescriptor},
+        render_resource::{LoadOp, Operations, RenderPassColorAttachment, RenderPassDescriptor, StoreOp},
         renderer::RenderContext,
         view::ExtractedView,
     },
@@ -34,11 +35,7 @@ impl ViewNode for Light2dDrawNode {
             return Ok(());
         };
 
-        if light_phase.items.is_empty() {
-            return Ok(());
-        }
-
-        let Some(mut lighting_texture) = world
+        let Some(lighting_texture) = world
             .resource::<LightingTextures>()
             .get(&view.retained_view_entity)
             .map(|t| t.clone())
@@ -51,7 +48,10 @@ impl ViewNode for Light2dDrawNode {
             color_attachments: &[Some(RenderPassColorAttachment {
                 view: &lighting_texture.input().default_view,
                 resolve_target: None,
-                ops: Operations::default(),
+                ops: Operations {
+                    load: LoadOp::Clear(LinearRgba::new(0.0, 0.0, 0.0, 1.0).into()),
+                    store: StoreOp::Store,
+                },
                 depth_slice: None,
             })],
             ..default()
@@ -61,11 +61,11 @@ impl ViewNode for Light2dDrawNode {
             pass.set_camera_viewport(viewport);
         }
 
-        if let Err(err) = light_phase.render(&mut pass, world, view_entity) {
-            error!("Error encountered while rendering the lighting phase {err:?}");
+        if !light_phase.items.is_empty() {
+            if let Err(err) = light_phase.render(&mut pass, world, view_entity) {
+                error!("Error encountered while rendering the lighting phase {err:?}");
+            }
         }
-
-        lighting_texture.flip();
 
         Ok(())
     }

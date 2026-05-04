@@ -36,6 +36,7 @@ use crate::{
         light2d_node::Light2dDrawNode, post_process_node::Light2dPostProcessDrawNode,
         voronoi_node::VoronoiDrawNode,
     },
+    roof_mask::RoofMaskPhase,
     settings::Lighting2dSettings,
 };
 
@@ -56,8 +57,11 @@ impl Plugin for Light2dRenderPlugin {
         render_app
             .init_resource::<VoronoiTextures>()
             .init_resource::<LightingTextures>()
+            .init_resource::<DirectionalOccluderTextures>()
+            .init_resource::<RoofTextures>()
             .init_resource::<ViewSortedRenderPhases<VoronoiPhase>>()
             .init_resource::<ViewSortedRenderPhases<Light2dPhase>>()
+            .init_resource::<ViewSortedRenderPhases<RoofMaskPhase>>()
             .init_resource::<DrawFunctions<VoronoiPhase>>()
             .init_resource::<DrawFunctions<Light2dPhase>>()
             .add_systems(
@@ -226,6 +230,7 @@ pub fn extract_light2d_phases(
     cameras: Extract<Query<(Entity, &Camera), (With<Camera2d>, With<Lighting2dSettings>)>>,
     mut mask_phases: ResMut<ViewSortedRenderPhases<VoronoiPhase>>,
     mut light2d_phases: ResMut<ViewSortedRenderPhases<Light2dPhase>>,
+    mut roof_phases: ResMut<ViewSortedRenderPhases<RoofMaskPhase>>,
     mut live_entities: Local<HashSet<RetainedViewEntity>>,
 ) {
     live_entities.clear();
@@ -239,12 +244,14 @@ pub fn extract_light2d_phases(
 
         mask_phases.insert_or_clear(retained_view_entity);
         light2d_phases.insert_or_clear(retained_view_entity);
+        roof_phases.insert_or_clear(retained_view_entity);
         live_entities.insert(retained_view_entity);
     }
 
     // Clear out all dead views
     mask_phases.retain(|camera_entity, _| live_entities.contains(camera_entity));
     light2d_phases.retain(|camera_entity, _| live_entities.contains(camera_entity));
+    roof_phases.retain(|camera_entity, _| live_entities.contains(camera_entity));
 }
 
 #[derive(Clone)]
@@ -282,12 +289,20 @@ pub struct LightingTextures(pub HashMap<RetainedViewEntity, FlipTexture>);
 #[derive(Resource, Deref, DerefMut, Default)]
 pub struct VoronoiTextures(pub HashMap<RetainedViewEntity, FlipTexture>);
 
+#[derive(Resource, Deref, DerefMut, Default)]
+pub struct DirectionalOccluderTextures(pub HashMap<RetainedViewEntity, CachedTexture>);
+
+#[derive(Resource, Deref, DerefMut, Default)]
+pub struct RoofTextures(pub HashMap<RetainedViewEntity, CachedTexture>);
+
 pub fn prepare_lighting_textures(
     views: Query<(&ViewTarget, &ExtractedView, &ExtractedLighting2dSettings)>,
     render_device: Res<RenderDevice>,
     mut texture_cache: ResMut<TextureCache>,
     mut voronoi_textures: ResMut<VoronoiTextures>,
     mut lighting_textures: ResMut<LightingTextures>,
+    mut directional_occluder_textures: ResMut<DirectionalOccluderTextures>,
+    mut roof_textures: ResMut<RoofTextures>,
     mut live_entities: Local<HashSet<RetainedViewEntity>>,
 ) {
     live_entities.clear();
@@ -340,8 +355,20 @@ pub fn prepare_lighting_textures(
                 texture_b: tex("lighting_texture_b"),
             },
         );
+
+        directional_occluder_textures.insert(
+            extracted_view.retained_view_entity,
+            tex("directional_occluder_texture"),
+        );
+
+        roof_textures.insert(
+            extracted_view.retained_view_entity,
+            tex("roof_mask_texture"),
+        );
     }
 
     voronoi_textures.retain(|entity, _| live_entities.contains(entity));
     lighting_textures.retain(|entity, _| live_entities.contains(entity));
+    directional_occluder_textures.retain(|entity, _| live_entities.contains(entity));
+    roof_textures.retain(|entity, _| live_entities.contains(entity));
 }

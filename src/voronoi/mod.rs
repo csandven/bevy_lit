@@ -2,7 +2,7 @@ use bevy::{
     asset::{embedded_asset, load_embedded_asset, AssetEventSystems},
     core_pipeline::FullscreenShader,
     ecs::{
-        component::Tick,
+        change_detection::Tick,
         system::{lifetimeless::SRes, SystemChangeTick, SystemParamItem},
     },
     math::FloatOrd,
@@ -19,13 +19,14 @@ use bevy::{
         },
         render_resource::{
             binding_types::{sampler, texture_2d, uniform_buffer},
-            BindGroup, BindGroupEntries, BindGroupLayout, BindGroupLayoutEntries,
+            BindGroup, BindGroupEntries, BindGroupLayoutDescriptor,
+            BindGroupLayoutEntries,
             CachedRenderPipelineId, ColorTargetState, ColorWrites, FragmentState, PipelineCache,
             RenderPipelineDescriptor, SamplerBindingType, SamplerDescriptor, ShaderStages,
             SpecializedMeshPipeline, SpecializedMeshPipelineError, SpecializedMeshPipelines,
-            TextureFormat, TextureSampleType,
+            TextureFormat, TextureSampleType, UniformBuffer,
         },
-        renderer::RenderDevice,
+        renderer::{RenderDevice, RenderQueue},
         sync_world::{MainEntity, MainEntityHashMap},
         texture::{FallbackImage, GpuImage},
         view::{ExtractedView, RenderVisibleEntities},
@@ -42,6 +43,7 @@ use bevy::{
 
 use crate::{
     occlusion::LightOccluder2d,
+    post_process::render::ExtractedLighting2dSettings,
     prelude::Lighting2dSettings,
     render::{extract_light2d_phases, VoronoiPhase},
 };
@@ -201,8 +203,14 @@ pub fn extract_entities_needs_specialization(
     }
 }
 
+#[derive(Clone, Copy)]
+pub struct RenderVoronoiMaterial {
+    pub alpha_mask: AssetId<Image>,
+    pub height: f32,
+}
+
 #[derive(Resource, Deref, DerefMut, Default)]
-pub struct RenderVoronoiMaterials(MainEntityHashMap<AssetId<Image>>);
+pub struct RenderVoronoiMaterials(MainEntityHashMap<RenderVoronoiMaterial>);
 
 fn extract_voronoi_materials(
     mut render_voronoi_instances: ResMut<RenderVoronoiMaterials>,
@@ -212,7 +220,13 @@ fn extract_voronoi_materials(
 
     for (entity, view_visibility, material) in &query {
         if view_visibility.get() {
-            render_voronoi_instances.insert(entity.into(), material.into());
+            render_voronoi_instances.insert(
+                entity.into(),
+                RenderVoronoiMaterial {
+                    alpha_mask: material.occluder_mask.id(),
+                    height: material.height.max(0.0),
+                },
+            );
         }
     }
 }
@@ -220,7 +234,7 @@ fn extract_voronoi_materials(
 #[derive(Resource)]
 pub struct MaskPipeline {
     pub mesh_pipeline: Mesh2dPipeline,
-    pub material_layout: BindGroupLayout,
+    pub material_layout: BindGroupLayoutDescriptor,
     pub shader: Handle<Shader>,
 }
 
@@ -259,20 +273,20 @@ impl SpecializedMeshPipeline for MaskPipeline {
 
 pub fn init_mask_pipeline(
     mut commands: Commands,
-    render_device: Res<RenderDevice>,
     mesh_2d_pipeline: Res<Mesh2dPipeline>,
     asset_server: Res<AssetServer>,
 ) {
     commands.insert_resource(MaskPipeline {
         mesh_pipeline: mesh_2d_pipeline.clone(),
         shader: load_embedded_asset!(asset_server.as_ref(), "mask.wgsl"),
-        material_layout: render_device.create_bind_group_layout(
+        material_layout: BindGroupLayoutDescriptor::new(
             "mask_material_bind_group_layout",
             &BindGroupLayoutEntries::sequential(
                 ShaderStages::FRAGMENT,
                 (
                     texture_2d(TextureSampleType::Float { filterable: true }),
                     sampler(SamplerBindingType::Filtering),
+                    uniform_buffer::<Vec4>(false),
                 ),
             ),
         ),
@@ -314,7 +328,7 @@ pub fn specialize_mask_meshes(
 
         for (_, view_entity) in visible_entities.iter::<Mesh2d>() {
             if !render_material_instances.contains_key(view_entity) {
-                return;
+                continue;
             }
 
             let entity_tick = material_specialization_ticks.get(view_entity).unwrap();
@@ -364,7 +378,12 @@ pub fn queue_mask_meshes(
     render_meshes: Res<RenderAssets<RenderMesh>>,
     mut render_mesh_instances: ResMut<RenderMesh2dInstances>,
     mut mask_render_phase: ResMut<ViewSortedRenderPhases<VoronoiPhase>>,
-    views: Query<(&MainEntity, &ExtractedView, &RenderVisibleEntities)>,
+    views: Query<(
+        &MainEntity,
+        &ExtractedView,
+        &RenderVisibleEntities,
+        &ExtractedLighting2dSettings,
+    )>,
     render_material_instances: Res<RenderVoronoiMaterials>,
     mut specialized_material_pipeline_cache: ResMut<
         SpecializedMaterial2dPipelineCache<LightOccluder2d>,
@@ -374,20 +393,25 @@ pub fn queue_mask_meshes(
         return;
     }
 
-    for (view_entity, view, visible_entities) in &views {
+    for (view_entity, view, visible_entities, lighting_settings) in &views {
         let Some(mask_phase) = mask_render_phase.get_mut(&view.retained_view_entity) else {
             continue;
         };
 
         let draw_mask_mesh = mask_draw_functions.read().id::<DrawMaskMesh>();
+        let camera_center = view.world_from_view.translation().xy();
+        let max_screen_occluders = usize::try_from(lighting_settings.max_screen_occluders)
+            .unwrap_or(usize::MAX);
 
         let view_specialized_material_pipeline_cache = specialized_material_pipeline_cache
             .entry(*view_entity)
             .or_default();
 
+        let mut candidates = Vec::new();
+
         for (render_entity, view_entity) in visible_entities.iter::<Mesh2d>() {
             if !render_material_instances.contains_key(view_entity) {
-                return;
+                continue;
             }
 
             let Some(mesh_instance) = render_mesh_instances.get_mut(view_entity) else {
@@ -402,46 +426,84 @@ pub fn queue_mask_meshes(
                 continue;
             };
 
+            let world_pos = mesh_instance.transforms.world_from_local.translation.xy();
+            let distance_sq = camera_center.distance_squared(world_pos);
+
+            candidates.push((
+                FloatOrd(distance_sq),
+                FloatOrd(mesh_instance.transforms.world_from_local.translation.z),
+                *pipeline_id,
+                *render_entity,
+                *view_entity,
+                mesh.indexed(),
+            ));
+        }
+
+        candidates.sort_by_key(|candidate| candidate.0);
+
+        if max_screen_occluders > 0 && candidates.len() > max_screen_occluders {
+            candidates.truncate(max_screen_occluders);
+        }
+
+        for (_, sort_key, pipeline_id, render_entity, view_entity, indexed) in candidates {
             mask_phase.add(VoronoiPhase {
-                sort_key: FloatOrd(mesh_instance.transforms.world_from_local.translation.z),
-                pipeline: *pipeline_id,
+                sort_key,
+                pipeline: pipeline_id,
                 draw_function: draw_mask_mesh,
-                entity: (*render_entity, *view_entity),
+                entity: (render_entity, view_entity),
                 batch_range: 0..1,
                 extra_index: PhaseItemExtraIndex::None,
-                indexed: mesh.indexed(),
+                indexed,
             });
         }
     }
 }
 
+pub struct PreparedMaskMaterialBindGroup {
+    bind_group: BindGroup,
+    _height_uniform: UniformBuffer<Vec4>,
+}
+
 #[derive(Resource, Deref, DerefMut, Default)]
-pub struct MaskMaterialBindGroups(MainEntityHashMap<BindGroup>);
+pub struct MaskMaterialBindGroups(MainEntityHashMap<PreparedMaskMaterialBindGroup>);
 
 pub fn prepare_mask_material_bind_groups(
     render_device: Res<RenderDevice>,
+    render_queue: Res<RenderQueue>,
+    pipeline_cache: Res<PipelineCache>,
     pipeline: Res<MaskPipeline>,
     images: Res<RenderAssets<GpuImage>>,
     fallback_image: Res<FallbackImage>,
     voronoi_materials: Res<RenderVoronoiMaterials>,
     mut bind_groups: ResMut<MaskMaterialBindGroups>,
 ) {
-    // Only update bind groups for entities that have changed or are new
-    bind_groups.retain(|entity, _| voronoi_materials.contains_key(entity));
+    bind_groups.clear();
 
-    for (entity, alpha_mask) in voronoi_materials.iter() {
-        let alpha_mask_image = if let Some(image) = images.get(*alpha_mask) {
+    let material_layout = pipeline_cache.get_bind_group_layout(&pipeline.material_layout);
+    for (entity, material) in voronoi_materials.iter() {
+        let alpha_mask_image = if let Some(image) = images.get(material.alpha_mask) {
             image
         } else {
             &fallback_image.d2
         };
         let sampler = render_device.create_sampler(&SamplerDescriptor::default());
+        let mut height_uniform = UniformBuffer::from(Vec4::new(material.height, 0.0, 0.0, 0.0));
+        height_uniform.write_buffer(&render_device, &render_queue);
+        let Some(height_binding) = height_uniform.binding() else {
+            continue;
+        };
         let bind_group = render_device.create_bind_group(
             "mask_material_bind_group",
-            &pipeline.material_layout,
-            &BindGroupEntries::sequential((&alpha_mask_image.texture_view, &sampler)),
+            &material_layout,
+            &BindGroupEntries::sequential((&alpha_mask_image.texture_view, &sampler, height_binding)),
         );
-        bind_groups.insert(*entity, bind_group);
+        bind_groups.insert(
+            *entity,
+            PreparedMaskMaterialBindGroup {
+                bind_group,
+                _height_uniform: height_uniform,
+            },
+        );
     }
 }
 
@@ -471,27 +533,26 @@ impl<P: PhaseItem, const I: usize> RenderCommand<P> for SetMaskMaterialBindGroup
         let Some(bind_group) = bind_groups.get(&item.main_entity()) else {
             return RenderCommandResult::Skip;
         };
-        pass.set_bind_group(I, &bind_group, &[]);
+        pass.set_bind_group(I, &bind_group.bind_group, &[]);
         RenderCommandResult::Success
     }
 }
 
 #[derive(Resource)]
 pub struct FloodPipeline {
-    pub seed_layout: BindGroupLayout,
+    pub seed_layout: BindGroupLayoutDescriptor,
     pub seed_pipeline: CachedRenderPipelineId,
-    pub layout: BindGroupLayout,
+    pub layout: BindGroupLayoutDescriptor,
     pub pipeline: CachedRenderPipelineId,
 }
 
 pub fn init_flood_pipeline(
     mut commands: Commands,
-    render_device: Res<RenderDevice>,
     fullscreen_shader: Res<FullscreenShader>,
     pipeline_cache: Res<PipelineCache>,
     asset_server: Res<AssetServer>,
 ) {
-    let seed_layout = render_device.create_bind_group_layout(
+    let seed_layout = BindGroupLayoutDescriptor::new(
         "flood_seed_bind_group_layout",
         &BindGroupLayoutEntries::sequential(
             ShaderStages::FRAGMENT,
@@ -521,7 +582,7 @@ pub fn init_flood_pipeline(
         ..default()
     });
 
-    let layout = render_device.create_bind_group_layout(
+    let layout = BindGroupLayoutDescriptor::new(
         "flood_bind_group_layout",
         &BindGroupLayoutEntries::sequential(
             ShaderStages::FRAGMENT,

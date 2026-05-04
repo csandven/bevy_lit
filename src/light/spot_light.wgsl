@@ -43,13 +43,13 @@ fn fragment(in: VertexOutput) -> @location(0) vec4<f32> {
 
     let fragment_direction = normalize(light_center - pos);
     let dot_product = dot(light_direction, fragment_direction);
-    let angle_diff = acos(clamp(dot_product, -1.0, 1.0));
-    let angular_attenuation = attenuation(
-        light.inner_angle,
-        light.outer_angle,
-        light.angular_falloff,
-        angle_diff
-    );
+    let cos_inner = cos(light.inner_angle);
+    let cos_outer = cos(light.outer_angle);
+    let cone_span = max(cos_inner - cos_outer, 0.0001);
+    let cone_t = clamp((dot_product - cos_outer) / cone_span, 0.0, 1.0);
+    let cone_t_sq = cone_t * cone_t;
+    let cone_falloff = 1.0 - cone_t;
+    let angular_attenuation = cone_t_sq / (1.0 + light.angular_falloff * cone_falloff * cone_falloff);
 
     if angular_attenuation == 0.0 {
         discard;
@@ -63,7 +63,7 @@ fn fragment(in: VertexOutput) -> @location(0) vec4<f32> {
     if sdf <= 0.0 {
         light_contrib *= select(0.0, 1.0, bool(settings.tint_occluders));
     } else {
-        if bool(light.cast_shadows) {
+        if bool(settings.shadows_enabled) && bool(light.cast_shadows) {
             light_contrib *= raymarch(pos, light_center);
         }
     }

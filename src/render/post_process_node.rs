@@ -15,11 +15,15 @@ use bevy::{
 };
 
 use crate::{
+    directional_shadow::DirectionalLight2dUniform,
     post_process::render::{
-        ExtractedLighting2dSettings, Lighting2dCompositePipeline, Lighting2dCompositePipelineId,
-        Lighting2dPostProcessPipelines,
+        DirectionalShadowPipeline, ExtractedLighting2dSettings, Lighting2dCompositePipeline,
+        Lighting2dCompositePipelineId, Lighting2dPostProcessPipelines,
     },
-    render::{FlipTexture, LightingTextures, VoronoiTextures},
+    render::{
+        DirectionalOccluderTextures, FlipTexture, LightingTextures, RoofTextures,
+        VoronoiTextures,
+    },
     settings::PenetrationSettings,
 };
 
@@ -51,7 +55,7 @@ pub fn run_penetration_pass<'w>(
 
     let bind_group = render_context.render_device().create_bind_group(
         "penetration_bind_group",
-        &post_process_pipelines.penetration_layout,
+        &pipeline_cache.get_bind_group_layout(&post_process_pipelines.penetration_layout),
         &BindGroupEntries::sequential((
             view_uniforms,
             lighting_settings_uniforms,
@@ -114,7 +118,7 @@ pub fn run_blur_pass<'w>(
 
     let bind_group = render_context.render_device().create_bind_group(
         "blur_bind_group",
-        &post_process_pipelines.blur_layout,
+        &pipeline_cache.get_bind_group_layout(&post_process_pipelines.blur_layout),
         &BindGroupEntries::sequential((
             lighting_settings_uniforms,
             direction,
@@ -166,7 +170,7 @@ pub fn run_composite_pass<'w>(
 
     let bind_group = render_context.render_device().create_bind_group(
         "composite_bind_group",
-        &world.resource::<Lighting2dCompositePipeline>().layout,
+        &pipeline_cache.get_bind_group_layout(&world.resource::<Lighting2dCompositePipeline>().layout),
         &BindGroupEntries::sequential((
             lighting_settings_uniforms,
             post_process.source,
@@ -189,6 +193,100 @@ pub fn run_composite_pass<'w>(
     pass.set_render_pipeline(pipeline);
     pass.set_bind_group(0, &bind_group, &[settings_uniform_offset]);
     pass.draw(0..3, 0..1);
+}
+
+pub fn run_directional_shadow_pass<'w>(
+    world: &'w World,
+    render_context: &mut RenderContext<'w>,
+    camera: &ExtractedCamera,
+    lighting_texture: &mut FlipTexture,
+    view: &ExtractedView,
+    view_uniform_offset: u32,
+    settings_uniform_offset: u32,
+) {
+    let Some(pipeline_res) = world.get_resource::<DirectionalShadowPipeline>() else {
+        return;
+    };
+    let pipeline_cache = world.resource::<PipelineCache>();
+
+    let (
+        Some(pipeline),
+        Some(view_uniforms),
+        Some(lighting_settings_uniforms),
+        Some(sun_uniform),
+    ) = (
+        pipeline_cache.get_render_pipeline(pipeline_res.pipeline),
+        world.resource::<ViewUniforms>().uniforms.binding(),
+        world
+            .resource::<ComponentUniforms<ExtractedLighting2dSettings>>()
+            .binding(),
+        world
+            .resource::<DirectionalLight2dUniform>()
+            .buffer
+            .binding(),
+    ) else {
+        return;
+    };
+
+    // Fallback to a black 1×1 texture if no roof texture exists for this view.
+    let roof_texture_view = world
+        .resource::<RoofTextures>()
+        .get(&view.retained_view_entity)
+        .map(|t| &t.default_view);
+    let Some(roof_texture_view) = roof_texture_view else {
+        return;
+    };
+
+    let occluder_texture_view = world
+        .resource::<DirectionalOccluderTextures>()
+        .get(&view.retained_view_entity)
+        .map(|t| &t.default_view);
+    let Some(occluder_texture_view) = occluder_texture_view else {
+        return;
+    };
+
+    let sampler = render_context
+        .render_device()
+        .create_sampler(&SamplerDescriptor::default());
+
+    let bind_group = render_context.render_device().create_bind_group(
+        "directional_shadow_bind_group",
+        &pipeline_cache.get_bind_group_layout(&pipeline_res.layout),
+        &BindGroupEntries::sequential((
+            view_uniforms,
+            lighting_settings_uniforms,
+            sun_uniform,
+            &lighting_texture.input().default_view,
+            occluder_texture_view,
+            roof_texture_view,
+            &sampler,
+        )),
+    );
+
+    let mut pass = render_context.begin_tracked_render_pass(RenderPassDescriptor {
+        label: Some("directional_shadow_pass"),
+        color_attachments: &[Some(RenderPassColorAttachment {
+            view: &lighting_texture.output().default_view,
+            resolve_target: None,
+            ops: Operations::default(),
+            depth_slice: None,
+        })],
+        ..default()
+    });
+
+    if let Some(viewport) = camera.viewport.as_ref() {
+        pass.set_camera_viewport(viewport);
+    }
+
+    pass.set_render_pipeline(pipeline);
+    pass.set_bind_group(
+        0,
+        &bind_group,
+        &[view_uniform_offset, settings_uniform_offset],
+    );
+    pass.draw(0..3, 0..1);
+
+    lighting_texture.flip();
 }
 
 #[derive(Default)]
@@ -243,6 +341,18 @@ impl ViewNode for Light2dPostProcessDrawNode {
                 camera,
                 &mut lighting_texture,
                 &voronoi_texture,
+                view_uniform_offset.offset,
+                settings_uniform_index.index(),
+            );
+        }
+
+        if lighting_settings.shadows_enabled != 0 {
+            run_directional_shadow_pass(
+                world,
+                render_context,
+                camera,
+                &mut lighting_texture,
+                view,
                 view_uniform_offset.offset,
                 settings_uniform_index.index(),
             );
