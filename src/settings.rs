@@ -91,6 +91,11 @@ pub struct Lighting2dSettings {
     pub edge_intensity: f32,
     /// The blur radius to be applied to the light map. Defaults to 0
     pub blur: u32,
+    /// Maximum number of visible occluders to include in the shared shadow/SDF
+    /// field for this camera.
+    ///
+    /// `0` means unlimited. 
+    pub max_screen_occluders: u32,
 }
 
 impl Default for Lighting2dSettings {
@@ -102,6 +107,7 @@ impl Default for Lighting2dSettings {
             scale: 0.5,
             edge_intensity: 0.0,
             blur: 0,
+            max_screen_occluders: 0,
         }
     }
 }

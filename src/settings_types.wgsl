@@ -4,7 +4,7 @@ struct RaymarchSettings {
     max_steps: u32,
     jitter: f32,
     sharpness: f32,
-    _pad: u32
+    pad: u32
 }
 
 struct PenetrationSettings {
@@ -23,4 +23,7 @@ struct Lighting2dSettings {
     tint_occluders: u32,
     edge_intensity: f32,
     blur: i32,
+    shadows_enabled: u32,
+    @size(12)
+    max_screen_occluders: u32,
 }

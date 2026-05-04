@@ -1,12 +1,14 @@
 use bevy::{prelude::*, shader::load_shader_library};
 
 use crate::{
+    directional_shadow::DirectionalLight2dPlugin,
     light::{
         point_light::PointLight2dPlugin, spot_light::SpotLight2dPlugin,
         texture_light::TextureLight2dPlugin,
     },
     post_process::Lighting2dSettingsPlugin,
     render::Light2dRenderPlugin,
+    roof_mask::RoofMask2dPlugin,
     voronoi::Voronoi2dPlugin,
 };
 
@@ -27,6 +29,8 @@ impl Plugin for Lighting2dPlugin {
             PointLight2dPlugin,
             SpotLight2dPlugin,
             TextureLight2dPlugin,
+            DirectionalLight2dPlugin,
+            RoofMask2dPlugin,
         ));
     }
 }

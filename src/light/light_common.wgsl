@@ -35,21 +35,25 @@ fn attenuation(inner: f32, outer: f32, falloff: f32, diff: f32) -> f32 {
 
     let s = (diff - inner) / (outer - inner);
     let s2 = s * s;
+    let inv = 1.0 - s2;
 
-    return pow(1.0 - s2, 2.0) / (1.0 + falloff * s2);
+    return (inv * inv) / (1.0 + falloff * s2);
 }
 
 fn get_sdf(pos: vec2<f32>) -> f32 {
     let uv = world_to_uv(vec3(pos, 0.0), view);
     let samp = textureSampleLevel(voronoi_texture, voronoi_sampler, uv, 0.0);
 
-    // Original seed
-    if samp.z == 1.0 {
-        return 0.0;
+    if samp.x < 0.0 || samp.y < 0.0 {
+        return 9999999999.0;
     }
 
-    let seed = frag_to_world(samp / settings.scale, view).xy;
+    let seed = frag_to_world(vec4<f32>(samp.xy, 0.0, 0.0) / settings.scale, view).xy;
     let dist = length(pos - seed);
+
+    if dist <= 2.0 / settings.scale {
+        return 0.0;
+    }
 
     // Determine if the pixel is inside or outside the shape
     return select(dist, -dist, samp.w == 1.0);
@@ -83,6 +87,12 @@ fn raymarch(ray_origin: vec2<f32>, ray_target: vec2<f32>) -> f32 {
         }
 
         light_contrib = min(light_contrib, sdf / ray_progress * sharpness);
+
+        // Early exit: contribution is negligibly small, treat as fully occluded
+        if light_contrib < 0.001 {
+            return 0.0;
+        }
+
         ray_progress += sdf * (1.0 - jitter) + jitter * fract(sdf * 43758.5453);
     }
 

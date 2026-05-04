@@ -10,21 +10,17 @@ fn fragment(in: FullscreenVertexOutput) -> @location(0) vec4<f32> {
     return gaussian_blur(in.position.xy, direction, settings.blur);
 }
 
-fn gaussian_weight(x: f32, sigma: f32) -> f32 {
-    return exp(-0.5 * (x * x) / (sigma * sigma));
-}
-
 fn gaussian_blur(frag_pos: vec2<f32>, direction: vec2<i32>, radius: i32) -> vec4<f32> {
-    let sigma = f32(radius) * 0.25;
+    let effective_radius = clamp(radius, 1, 3);
     let texel_pos = vec2<i32>(frag_pos);
-    let tex_size = vec2<i32>(textureDimensions(texture));
+    let tex_max = vec2<i32>(textureDimensions(texture)) - vec2<i32>(1);
 
     var color = vec4<f32>(0.0);
     var total_weight: f32 = 0.0;
 
-    for (var i = -radius; i <= radius; i++) {
-        let sample_pos = clamp(texel_pos + direction * i, vec2<i32>(0), tex_size - vec2<i32>(1));
-        let w = gaussian_weight(f32(i), sigma);
+    for (var i = -effective_radius; i <= effective_radius; i++) {
+        let w = f32(effective_radius + 1 - abs(i));
+        let sample_pos = clamp(texel_pos + direction * i, vec2<i32>(0), tex_max);
         color += textureLoad(texture, sample_pos, 0) * w;
         total_weight += w;
     }

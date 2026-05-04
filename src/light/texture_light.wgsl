@@ -37,7 +37,7 @@ fn fragment(in: VertexOutput) -> @location(0) vec4<f32> {
     if sdf <= 0.0 {
         light_contrib *= select(0.0, 1.0, bool(settings.tint_occluders));
     } else {
-        if bool(light.cast_shadows) {
+        if bool(settings.shadows_enabled) && bool(light.cast_shadows) {
             light_contrib *= raymarch(pos, light_center);
         }
     }

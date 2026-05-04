@@ -27,7 +27,8 @@ use bevy::{
         },
         render_resource::{
             binding_types::{sampler, texture_2d, uniform_buffer},
-            AsBindGroup, BindGroup, BindGroupEntries, BindGroupLayout, BindGroupLayoutEntries,
+            AsBindGroup, BindGroup, BindGroupEntries, BindGroupLayout, BindGroupLayoutDescriptor,
+            BindGroupLayoutEntries,
             BlendComponent, BlendFactor, BlendOperation, BlendState, BufferUsages,
             ColorTargetState, ColorWrites, FragmentState, IndexFormat, PipelineCache,
             PreparedBindGroup, RawBufferVec, RenderPipelineDescriptor, SamplerBindingType,
@@ -49,7 +50,7 @@ use fixedbitset::FixedBitSet;
 
 use crate::{
     post_process::render::ExtractedLighting2dSettings,
-    render::{Light2dPhase, VoronoiTextures},
+    render::{prepare_lighting_textures, Light2dPhase, VoronoiTextures},
 };
 
 /// A reference for the 2d light shader asset
@@ -145,7 +146,8 @@ impl<L: Light2dMaterial> Plugin for CustomLight2dPlugin<L> {
                 (
                     queue_light2d_instances::<L>.in_set(RenderSystems::Queue),
                     (
-                        prepare_light2d_view_bind_groups::<L>,
+                        prepare_light2d_view_bind_groups::<L>
+                            .after(prepare_lighting_textures),
                         prepare_light2d_buffers::<L>,
                     )
                         .in_set(RenderSystems::PrepareBindGroups),
@@ -187,7 +189,8 @@ pub struct Light2dPipeline<L: Light2dMaterial> {
     vertex_shader: Handle<Shader>,
     fragment_shader: Handle<Shader>,
     view_layout: BindGroupLayout,
-    light_layout: BindGroupLayout,
+    view_layout_desc: BindGroupLayoutDescriptor,
+    light_layout_desc: BindGroupLayoutDescriptor,
     marker: PhantomData<L>,
 }
 
@@ -196,27 +199,34 @@ pub fn init_light2d_pipeline<L: Light2dMaterial>(
     render_device: Res<RenderDevice>,
     asset_server: Res<AssetServer>,
 ) {
+    let view_layout_entries = BindGroupLayoutEntries::sequential(
+        ShaderStages::VERTEX_FRAGMENT,
+        (
+            uniform_buffer::<ViewUniform>(true),
+            uniform_buffer::<ExtractedLighting2dSettings>(true)
+                .visibility(ShaderStages::FRAGMENT),
+            texture_2d(TextureSampleType::Float { filterable: true })
+                .visibility(ShaderStages::FRAGMENT),
+            sampler(SamplerBindingType::Filtering).visibility(ShaderStages::FRAGMENT),
+        ),
+    );
+    let view_layout = render_device.create_bind_group_layout(
+        "light2d_view_layout",
+        &view_layout_entries,
+    );
+    let view_layout_desc = BindGroupLayoutDescriptor::new(
+        "light2d_view_layout",
+        &view_layout_entries,
+    );
     commands.insert_resource(Light2dPipeline::<L> {
         vertex_shader: load_embedded_asset!(asset_server.as_ref(), "light_vertex.wgsl"),
         fragment_shader: match L::fragment_shader() {
             Light2dShaderRef::Handle(handle) => handle,
             Light2dShaderRef::Path(path) => asset_server.load(path),
         },
-        view_layout: render_device.create_bind_group_layout(
-            "light2d_view_layout",
-            &BindGroupLayoutEntries::sequential(
-                ShaderStages::VERTEX_FRAGMENT,
-                (
-                    uniform_buffer::<ViewUniform>(true),
-                    uniform_buffer::<ExtractedLighting2dSettings>(true)
-                        .visibility(ShaderStages::FRAGMENT),
-                    texture_2d(TextureSampleType::Float { filterable: true })
-                        .visibility(ShaderStages::FRAGMENT),
-                    sampler(SamplerBindingType::Filtering).visibility(ShaderStages::FRAGMENT),
-                ),
-            ),
-        ),
-        light_layout: L::bind_group_layout(&render_device),
+        view_layout,
+        view_layout_desc,
+        light_layout_desc: L::bind_group_layout_descriptor(&render_device),
         marker: PhantomData,
     });
 }
@@ -232,7 +242,7 @@ impl<L: Light2dMaterial> SpecializedRenderPipeline for Light2dPipeline<L> {
     fn specialize(&self, _key: Self::Key) -> RenderPipelineDescriptor {
         RenderPipelineDescriptor {
             label: Some("light2d_pipeline".into()),
-            layout: vec![self.view_layout.clone(), self.light_layout.clone()],
+            layout: vec![self.view_layout_desc.clone(), self.light_layout_desc.clone()],
             vertex: VertexState {
                 shader: self.vertex_shader.clone(),
                 shader_defs: vec![],
@@ -330,7 +340,7 @@ pub fn queue_light2d_instances<L: Light2dMaterial>(
         view_entities.extend(
             visible_entities
                 .iter::<L>()
-                .map(|(_, e)| e.index() as usize),
+                .map(|(_, e)| e.index().index() as usize),
         );
 
         light2d_phase.items.reserve(render_light2d_instances.len());
@@ -338,7 +348,7 @@ pub fn queue_light2d_instances<L: Light2dMaterial>(
         for ((render_entity, main_entity), render_light) in render_light2d_instances.iter() {
             let view_index = main_entity.index();
 
-            if !view_entities.contains(view_index as usize) {
+            if !view_entities.contains(view_index.index() as usize) {
                 continue;
             }
 
@@ -465,6 +475,7 @@ pub struct PreparedLight2dMaterialBindGroups<L: Light2dMaterial> {
 pub fn prepare_light2d_buffers<L: Light2dMaterial>(
     render_device: Res<RenderDevice>,
     render_queue: Res<RenderQueue>,
+    pipeline_cache: Res<PipelineCache>,
     render_lights2d: Res<RenderLights2dInstances<L>>,
     render_images: Res<RenderAssets<GpuImage>>,
     mut light2d_meta: ResMut<Light2dMeta<L>>,
@@ -485,8 +496,9 @@ pub fn prepare_light2d_buffers<L: Light2dMaterial>(
             };
 
             let Ok(prepared_bind_group) = light.instance.as_bind_group(
-                &L::bind_group_layout(&render_device),
+                &L::bind_group_layout_descriptor(&render_device),
                 &render_device,
+                &pipeline_cache,
                 &mut system_param,
             ) else {
                 continue;
@@ -610,7 +622,6 @@ impl<P: PhaseItem, L: Light2dMaterial> RenderCommand<P> for DrawLight2dBatch<L> 
 
         pass.set_index_buffer(
             light2d_meta.index_buffer.buffer().unwrap().slice(..),
-            0,
             IndexFormat::Uint32,
         );
         pass.set_vertex_buffer(0, light2d_meta.instance_buffer.buffer().unwrap().slice(..));

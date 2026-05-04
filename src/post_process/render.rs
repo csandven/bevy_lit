@@ -5,39 +5,39 @@ use bevy::{
     render::{
         render_resource::{
             binding_types::{sampler, texture_2d, uniform_buffer},
-            BindGroupLayout, BindGroupLayoutEntries, BindGroupLayoutEntry, CachedRenderPipelineId,
+            BindGroupLayoutDescriptor, BindGroupLayoutEntries,
+            BindGroupLayoutEntry, CachedRenderPipelineId,
             ColorTargetState, ColorWrites, FragmentState, PipelineCache, RenderPipelineDescriptor,
             SamplerBindingType, ShaderStages, ShaderType, SpecializedRenderPipeline,
             SpecializedRenderPipelines, TextureFormat, TextureSampleType,
         },
-        renderer::RenderDevice,
         sync_world::RenderEntity,
         view::{ExtractedView, ViewTarget, ViewUniform},
         Extract,
     },
     shader::Shader,
 };
+use crate::directional_shadow::ExtractedDirectionalLight2d;
 
 use crate::settings::{AmbientLight2d, Lighting2dSettings, PenetrationSettings, RaymarchSettings};
 
 #[derive(Resource)]
 pub struct Lighting2dPostProcessPipelines {
-    pub penetration_layout: BindGroupLayout,
+    pub penetration_layout: BindGroupLayoutDescriptor,
     pub penetration_pipeline: CachedRenderPipelineId,
-    pub blur_layout: BindGroupLayout,
+    pub blur_layout: BindGroupLayoutDescriptor,
     pub blur_pipeline: CachedRenderPipelineId,
 }
 
 fn create_post_process_pipeline(
-    render_device: &RenderDevice,
     pipeline_cache: &PipelineCache,
     fullscreen_shader: &FullscreenShader,
     label: &'static str,
     shader: Handle<Shader>,
     entries: &[BindGroupLayoutEntry],
-) -> (BindGroupLayout, CachedRenderPipelineId) {
-    let layout = render_device.create_bind_group_layout(
-        &(String::from(label) + "_bind_group_layout") as &str,
+) -> (BindGroupLayoutDescriptor, CachedRenderPipelineId) {
+    let layout = BindGroupLayoutDescriptor::new(
+        String::from(label) + "_bind_group_layout",
         entries,
     );
 
@@ -67,13 +67,11 @@ fn create_post_process_pipeline(
 
 pub fn init_post_process_pipelines(
     mut commands: Commands,
-    render_device: Res<RenderDevice>,
     pipeline_cache: Res<PipelineCache>,
     asset_server: Res<AssetServer>,
     fullscreen_shader: Res<FullscreenShader>,
 ) {
     let (penetration_layout, penetration_pipeline) = create_post_process_pipeline(
-        &render_device,
         &pipeline_cache,
         &fullscreen_shader,
         "penetration",
@@ -91,7 +89,6 @@ pub fn init_post_process_pipelines(
     );
 
     let (blur_layout, blur_pipeline) = create_post_process_pipeline(
-        &render_device,
         &pipeline_cache,
         &fullscreen_shader,
         "blur",
@@ -114,23 +111,57 @@ pub fn init_post_process_pipelines(
     });
 }
 
+/// GPU pipeline for the full-screen directional shadow post-process pass.
+#[derive(Resource)]
+pub struct DirectionalShadowPipeline {
+    pub layout: BindGroupLayoutDescriptor,
+    pub pipeline: CachedRenderPipelineId,
+}
+
+pub fn init_directional_shadow_pipeline(
+    mut commands: Commands,
+    pipeline_cache: Res<PipelineCache>,
+    asset_server: Res<AssetServer>,
+    fullscreen_shader: Res<FullscreenShader>,
+) {
+    let (layout, pipeline) = create_post_process_pipeline(
+        &pipeline_cache,
+        &fullscreen_shader,
+        "directional_shadow",
+        load_embedded_asset!(asset_server.as_ref(), "directional_shadow.wgsl"),
+        &BindGroupLayoutEntries::sequential(
+            ShaderStages::FRAGMENT,
+            (
+                uniform_buffer::<ViewUniform>(true),
+                uniform_buffer::<ExtractedLighting2dSettings>(true),
+                uniform_buffer::<ExtractedDirectionalLight2d>(false),
+                texture_2d(TextureSampleType::Float { filterable: true }),
+                texture_2d(TextureSampleType::Float { filterable: true }),
+                texture_2d(TextureSampleType::Float { filterable: true }),
+                sampler(SamplerBindingType::Filtering),
+            ),
+        ),
+    );
+
+    commands.insert_resource(DirectionalShadowPipeline { layout, pipeline });
+}
+
 #[derive(Resource)]
 pub struct Lighting2dCompositePipeline {
-    pub layout: BindGroupLayout,
+    pub layout: BindGroupLayoutDescriptor,
     pub shader: Handle<Shader>,
     pub fullscreen_shader: FullscreenShader,
 }
 
 pub fn init_lighting2d_composite_pipeline(
     mut commands: Commands,
-    render_device: Res<RenderDevice>,
     asset_server: Res<AssetServer>,
     fullscreen_shader: Res<FullscreenShader>,
 ) {
     commands.insert_resource(Lighting2dCompositePipeline {
         shader: load_embedded_asset!(asset_server.as_ref(), "composite.wgsl"),
         fullscreen_shader: fullscreen_shader.clone(),
-        layout: render_device.create_bind_group_layout(
+        layout: BindGroupLayoutDescriptor::new(
             "composite_bind_group_layout",
             &BindGroupLayoutEntries::sequential(
                 ShaderStages::FRAGMENT,
@@ -184,7 +215,7 @@ impl SpecializedRenderPipeline for Lighting2dCompositePipeline {
 
 #[derive(Component, Clone, ShaderType)]
 pub struct ExtractedLighting2dSettings {
-    #[size(16)]
+    #[shader(size(16))]
     pub raymarch: RaymarchSettings,
     pub penetration: PenetrationSettings,
     pub ambient_light: LinearRgba,
@@ -192,15 +223,18 @@ pub struct ExtractedLighting2dSettings {
     pub tint_occluders: u32,
     pub edge_intensity: f32,
     pub blur: i32,
+    pub shadows_enabled: u32,
+    #[shader(size(12))]
+    pub max_screen_occluders: u32,
 }
 
 pub fn extract_lighting2d_settings(
     mut commands: Commands,
     ambient_light_query: Extract<
-        Query<(RenderEntity, &Lighting2dSettings, &AmbientLight2d), With<Camera2d>>,
+        Query<(RenderEntity, &Lighting2dSettings, &AmbientLight2d, &Projection), With<Camera2d>>,
     >,
 ) {
-    for (e, settings, ambient_light) in &ambient_light_query {
+    for (e, settings, ambient_light, projection) in &ambient_light_query {
         commands.entity(e).insert(ExtractedLighting2dSettings {
             scale: settings.scale,
             ambient_light: ambient_light.color.to_linear() * ambient_light.intensity,
@@ -209,6 +243,8 @@ pub fn extract_lighting2d_settings(
             tint_occluders: if settings.tint_occluders { 1 } else { 0 },
             edge_intensity: settings.edge_intensity,
             blur: settings.blur as i32,
+            shadows_enabled: 1,
+            max_screen_occluders: settings.max_screen_occluders,
         });
     }
 }

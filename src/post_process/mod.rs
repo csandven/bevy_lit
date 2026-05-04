@@ -8,8 +8,9 @@ use bevy::{
 };
 
 use crate::post_process::render::{
-    extract_lighting2d_settings, init_lighting2d_composite_pipeline, init_post_process_pipelines,
-    prepare_composite_pipelines, ExtractedLighting2dSettings, Lighting2dCompositePipeline,
+    extract_lighting2d_settings, init_directional_shadow_pipeline,
+    init_lighting2d_composite_pipeline, init_post_process_pipelines, prepare_composite_pipelines,
+    ExtractedLighting2dSettings, Lighting2dCompositePipeline,
 };
 
 pub mod render;
@@ -20,6 +21,7 @@ impl Plugin for Lighting2dSettingsPlugin {
         embedded_asset!(app, "penetration.wgsl");
         embedded_asset!(app, "blur.wgsl");
         embedded_asset!(app, "composite.wgsl");
+        embedded_asset!(app, "directional_shadow.wgsl");
 
         app.add_plugins(UniformComponentPlugin::<ExtractedLighting2dSettings>::default());
 
@@ -35,6 +37,7 @@ impl Plugin for Lighting2dSettingsPlugin {
                 (
                     init_post_process_pipelines,
                     init_lighting2d_composite_pipeline,
+                    init_directional_shadow_pipeline,
                 ),
             )
             .add_systems(
